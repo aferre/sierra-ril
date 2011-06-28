@@ -1,0 +1,7 @@
+Infineon X-GOLD RIL
+---------------------
+
+This RIL intend to address all the Infineon X-Gold family.
+
+
+this RIL was tested on the Infineon XMM6180 X-GOLD with an OMAP3430 over SPI for data/command and I2S for audio.
