@@ -3602,8 +3602,6 @@ mainLoop(void *param)
     int fd;
     int ret;
 
-    LOGI("Entering mainLoop");
-
     AT_DUMP("== ", "entering mainLoop()", -1 );
     at_set_on_reader_closed(onATReaderClosed);
     at_set_on_timeout(onATTimeout);
@@ -3624,11 +3622,10 @@ mainLoop(void *param)
                    struct termios  ios;
                    tcgetattr( fd, &ios );
                    ios.c_lflag = 0;  /* disable ECHO, ICANON, etc... */
-                   LOGI("FORCING SPEED");
                    if( cfsetispeed( &ios, B115200) != 0 )
-                       LOGE("Failed to set in speed\n");
+                       LOGE("Failed to set in speed");
                    if ( cfsetospeed( &ios, B115200) != 0 )
-                       LOGE("Failed to set out speed\n");
+                       LOGE("Failed to set out speed");
                    tcsetattr( fd, TCSANOW, &ios );
                 }
             }
@@ -3658,7 +3655,7 @@ mainLoop(void *param)
         LOGI("Re-opening after close");
     }
 }
-
+//
 #ifdef RIL_SHLIB
 
 pthread_t s_tid_mainloop;
