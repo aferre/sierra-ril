@@ -241,7 +241,7 @@ static void handleUnsolicited(const char *line)
     }
 }
 
-static void 	ne(const char *line)
+static void processLine(const char *line)
 {
     pthread_mutex_lock(&s_commandmutex);
 
