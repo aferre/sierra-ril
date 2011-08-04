@@ -3619,15 +3619,16 @@ mainLoop(void *param)
                                           SOCK_STREAM );
             } else if (s_device_path != NULL) {
                 fd = open (s_device_path, O_RDWR);
-                if ( fd >= 0 && !memcmp( s_device_path, "/dev/ttyS", 9 ) ) {
+                if ( fd >= 0 ) {
 		   /* disable echo on serial ports */
                    struct termios  ios;
                    tcgetattr( fd, &ios );
                    ios.c_lflag = 0;  /* disable ECHO, ICANON, etc... */
+                   LOGI("FORCING SPEED");
                    if( cfsetispeed( &ios, B115200) != 0 )
-                       printf("Failed to set in speed\n");
+                       LOGE("Failed to set in speed\n");
                    if ( cfsetospeed( &ios, B115200) != 0 )
-                       printf("Failed to set out speed\n");
+                       LOGE("Failed to set out speed\n");
                    tcsetattr( fd, TCSANOW, &ios );
                 }
             }
