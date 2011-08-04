@@ -324,7 +324,7 @@ static void onRadioPowerOn()
 static void onSIMReady()
 {
   /* Preferred RAT - UMTS Dualmode */
-  at_send_command("AT+XRAT=1,2", NULL);
+ // at_send_command("AT+XRAT=1,2", NULL);
 
   /* Network registration */
   at_send_command("AT+COPS=0", NULL);
@@ -339,17 +339,17 @@ static void onSIMReady()
   at_send_command("AT+CUSD=1", NULL);
 
   /*  Enable +CGEV GPRS event notifications, but don't buffer */
-  at_send_command("AT+CGEREP=1,0", NULL);
+  at_send_command("AT+CGEREP=0,0", NULL);
   
   /*  SMS PDU mode */
   at_send_command("AT+CMGF=0", NULL);
 
   /* Enable NITZ reporting */
   at_send_command("AT+CTZU=1", NULL);
-  at_send_command("AT+CTZR=1", NULL);
+  //at_send_command("AT+CTZR=1", NULL);
 
   /* Enable unsolizited RSSI reporting */
-  at_send_command("AT+XMER=1", NULL);
+  //at_send_command("AT+XMER=1", NULL);
   
   at_send_command_singleline("AT+CSMS=1", "+CSMS:", NULL);
   /*
@@ -3441,7 +3441,7 @@ static void initializeCallback(void *param)
     at_send_command("AT+CMOD=0", NULL);
 
     /*  Not muted */
-    at_send_command("AT+CMUT=0", NULL);
+    //at_send_command("AT+CMUT=0", NULL);
 
     /*  +CSSU unsolicited supp service notifications */
     at_send_command("AT+CSSN=0,1", NULL);
