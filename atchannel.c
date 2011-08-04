@@ -241,7 +241,7 @@ static void handleUnsolicited(const char *line)
     }
 }
 
-static void processLine(const char *line)
+static void 	ne(const char *line)
 {
     pthread_mutex_lock(&s_commandmutex);
 
@@ -279,6 +279,11 @@ static void processLine(const char *line)
                 && strStartsWith (line, s_responsePrefix)
             ) {
                 addIntermediate(line);
+		if (strStartsWith("+CPIN:",s_responsePrefix)){
+			LOGI("######## USING AT COMMAND +CPIN FIX FOR SIERRA WIRELESS");
+			sp_response->success = 1;
+			handleFinalResponse("OK");
+		}
             } else {
                 /* we already have an intermediate response */
                 handleUnsolicited(line);
