@@ -204,8 +204,6 @@ static const char* networkStatusToRilString(int state)
   }
 }
 
-
-
 static int preferredRatToRilRat(int rat)
 {
   /* Android expects:
@@ -1022,18 +1020,39 @@ static void requestHangup(void *data, size_t datalen, RIL_Token t)
     RIL_onRequestComplete(t, RIL_E_SUCCESS, NULL, 0);
 }
 
-static void requestSignalStrength(void *data, size_t datalen, RIL_Token t)
-{
+static void requestSignalStrength(void *data, size_t datalen, RIL_Token t) {
     ATResponse *p_response = NULL;
     int err;
     int response[2];
     char *line;
 
-    LOGD("Sending stored CSQ values to RIL");
-    response[0] = idccRSSITo3gpp(at_csq_rssi);
-    response[1] = at_csq_ber;
-    RIL_onRequestComplete(t, RIL_E_SUCCESS, response, sizeof(response));
+    err = at_send_command_singleline("AT+CSQ", "+CSQ:", &p_response);
+
+    if (err < 0 || p_response->success == 0) {
+        RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+        goto error;
+    }
+
+    line = p_response->p_intermediates->line;
+
+    err = at_tok_start(&line);
+    if (err < 0) goto error;
+
+    err = at_tok_nextint(&line, &(response[0]));
+    if (err < 0) goto error;
+
+    err = at_tok_nextint(&line, &(response[1]));
+    if (err < 0) goto error;
+
+    RIL_onRequestComplete(t, RIL_E_SUCCESS, response, sizeof (response));
+
+    at_response_free(p_response);
     return;
+
+error:
+    LOGE("requestSignalStrength must never return an error when radio is on");
+    RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+    at_response_free(p_response);
 }
 
 static void requestDtmfStart(void *data, size_t datalen, RIL_Token t)
@@ -1485,7 +1504,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
     apn = ((const char **)data)[2];
 
     /* Configure DLC1 for GPRS data */
-    err = at_send_command("AT+XDATACHANNEL=1,1,\"/mux/1\",\"/mux/2\",0", NULL);
+   // err = at_send_command("AT+XDATACHANNEL=1,1,\"/mux/1\",\"/mux/2\",0", NULL);
 
 #ifdef USE_TI_COMMANDS
     // Config for multislot class 10 (probably default anyway eh?)
@@ -2248,7 +2267,7 @@ static void requestResetRadio(RIL_Token t)
 {
   int err = 0;
   
-  err = at_send_command("AT+CFUN=16", NULL);
+  err = at_send_command("AT+CFUN=0", NULL);
   if(err < 0)
     RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
   else
