@@ -3602,6 +3602,8 @@ mainLoop(void *param)
     int fd;
     int ret;
 
+    LOGI("Entering mainLoop");
+
     AT_DUMP("== ", "entering mainLoop()", -1 );
     at_set_on_reader_closed(onATReaderClosed);
     at_set_on_timeout(onATTimeout);
@@ -3618,9 +3620,15 @@ mainLoop(void *param)
             } else if (s_device_path != NULL) {
                 fd = open (s_device_path, O_RDWR);
                 if ( fd >= 0 && !memcmp( s_device_path, "/dev/ttyS", 9 ) ) {
-                  
-		  /* disable echo on serial ports */
-
+		   /* disable echo on serial ports */
+                   struct termios  ios;
+                   tcgetattr( fd, &ios );
+                   ios.c_lflag = 0;  /* disable ECHO, ICANON, etc... */
+                   if( cfsetispeed( &ios, B115200) != 0 )
+                       printf("Failed to set in speed\n");
+                   if ( cfsetospeed( &ios, B115200) != 0 )
+                       printf("Failed to set out speed\n");
+                   tcsetattr( fd, TCSANOW, &ios );
                 }
             }
 
