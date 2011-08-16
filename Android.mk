@@ -46,12 +46,12 @@ ifeq (foo,foo)
   LOCAL_LDLIBS += -lpthread
   LOCAL_CFLAGS += -DRIL_SHLIB
   LOCAL_PRELINK_MODULE := false
-  LOCAL_MODULE:= libxgold-ril
+  LOCAL_MODULE:= libreference-ril
   include $(BUILD_SHARED_LIBRARY)
 else
   #build executable
   LOCAL_SHARED_LIBRARIES += \
       libril
-  LOCAL_MODULE:= xgold-ril
+  LOCAL_MODULE:= reference-ril
   include $(BUILD_EXECUTABLE)
 endif
