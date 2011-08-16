@@ -375,7 +375,7 @@ static void requestRadioPower(void *data, size_t datalen, RIL_Token t)
 
     if (onOff == 0 && sState != RADIO_STATE_OFF) {
 
-        err = at_send_command("AT+CFUN=4", &p_response);
+        err = at_send_command("AT+CFUN=0", &p_response);
        if (err < 0 || p_response->success == 0) goto error;
         setRadioState(RADIO_STATE_OFF);
     } else if (onOff > 0 && sState == RADIO_STATE_OFF) {
