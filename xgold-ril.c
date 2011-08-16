@@ -321,29 +321,27 @@ static void onRadioPowerOn()
 /** do post- SIM ready initialization */
 static void onSIMReady()
 {
-  /* Preferred RAT - UMTS Dualmode */
- // at_send_command("AT+XRAT=1,2", NULL);
 
   /* Network registration */
-  at_send_command("AT+COPS=0", NULL);
+  //at_send_command("AT+COPS=0", NULL);
 
   /*  Call Waiting notifications */
-  at_send_command("AT+CCWA=1", NULL);
+  //at_send_command("AT+CCWA=1", NULL);
   
   /*  No connected line identification */
-  at_send_command("AT+COLP=0", NULL);
+  //at_send_command("AT+COLP=0", NULL);
 
   /*  USSD unsolicited */
-  at_send_command("AT+CUSD=1", NULL);
+  //at_send_command("AT+CUSD=1", NULL);
 
   /*  Enable +CGEV GPRS event notifications, but don't buffer */
-  at_send_command("AT+CGEREP=0,0", NULL);
+  //at_send_command("AT+CGEREP=0,0", NULL);
   
   /*  SMS PDU mode */
-  at_send_command("AT+CMGF=0", NULL);
+  //at_send_command("AT+CMGF=0", NULL);
 
   /* Enable NITZ reporting */
-  at_send_command("AT+CTZU=1", NULL);
+  //at_send_command("AT+CTZU=1", NULL);
   //at_send_command("AT+CTZR=1", NULL);
 
   /* Enable unsolizited RSSI reporting */
