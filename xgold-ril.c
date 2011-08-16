@@ -682,7 +682,7 @@ static void requestGetPreferredNetworkType(void *data, size_t datalen, RIL_Token
     int response = 0;
     char *line;
 
-    err = at_send_command_singleline("AT+XRAT?", "+XRAT:", &p_response);
+    err = at_send_command_singleline("AT+CPOL?", "+CPOL:", &p_response);
 
     if (err < 0 || p_response->success == 0) {
         goto error;
