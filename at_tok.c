@@ -190,4 +190,23 @@ int at_tok_hasmore(char **p_cur)
     return ! (*p_cur == NULL || **p_cur == '\0');
 }
 
+/** *p_out returns count of given character (needle) in given string (p_in). */
+int at_tok_charcounter(char *p_in, char needle, int *p_out)
+{
+    char *p_cur = p_in;
+    int num_found = 0;
 
+    if (p_in == NULL)
+        return -1;
+
+    while (*p_cur != '\0') {
+        if (*p_cur == needle) {
+            num_found++;
+        }
+
+        p_cur++;
+    }
+
+    *p_out = num_found;
+    return 0;
+}
