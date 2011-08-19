@@ -38,6 +38,7 @@
 #include <cutils/sockets.h>
 #include <cutils/properties.h>
 #include <termios.h>
+#include <stdbool.h>
 
 #define LOG_TAG "RIL"
 #include <utils/Log.h>
@@ -627,10 +628,167 @@ error:
     RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
 }
 
-static void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t) {
-    /* We expect an answer on the following form:
-      +COPS: (2,"AT&T","AT&T","310410",0),(1,"T-Mobile ","TMO","310260",0)
-     */
+void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
+{
+    /*
+* AT+COPS=?
+* +COPS: [list of supported (<stat>,long alphanumeric <oper>
+* ,short alphanumeric <oper>,numeric <oper>[,<AcT>])s]
+* [,,(list of supported <mode>s),(list of supported <format>s)]
+*
+* <stat>
+* 0 = unknown
+* 1 = available
+* 2 = current
+* 3 = forbidden
+*/
+
+    int err = 0;
+    ATResponse *atresponse = NULL;
+    const char *statusTable[] =
+    { "unknown", "available", "current", "forbidden" };
+    char **responseArray = NULL;
+    char *p;
+    int n = 0, i = 0, j = 0, numStoredNetworks = 0;
+    char *s = NULL;
+    int QUERY_NW_NUM_PARAMS = 4;
+    
+    err = at_send_command_singleline("AT+COPS=?", "+COPS:", &atresponse);
+
+    if (err < 0 ||
+        atresponse->success == 0 || atresponse->p_intermediates == NULL)
+        goto error;
+
+    p = atresponse->p_intermediates->line;
+
+    /* count number of '('. */
+    err = at_tok_charcounter(p, '(', &n);
+    if (err < 0) goto error;
+
+    /* Allocate array of strings, blocks of 4 strings. */
+    responseArray = alloca(n * QUERY_NW_NUM_PARAMS * sizeof(char *));
+
+    /* Loop and collect response information into the response array. */
+    for (i = 0; i < n; i++) {
+        int status = 0;
+        char *line = NULL;
+        char *longAlphaNumeric = NULL;
+        char *shortAlphaNumeric = NULL;
+        char *numeric = NULL;
+        char *remaining = NULL;
+        bool continueOuterLoop = false;
+
+        s = line = getFirstElementValue(p, "(", ")", &remaining);
+        p = remaining;
+
+        if (line == NULL) {
+            LOGE("Null pointer while parsing COPS response. This should not "
+                 "happen.");
+            goto error;
+        }
+        /* <stat> */
+        err = at_tok_nextint(&line, &status);
+        if (err < 0)
+            goto error;
+
+        /* long alphanumeric <oper> */
+        err = at_tok_nextstr(&line, &longAlphaNumeric);
+        if (err < 0)
+            goto error;
+
+        /* short alphanumeric <oper> */
+        err = at_tok_nextstr(&line, &shortAlphaNumeric);
+        if (err < 0)
+            goto error;
+
+        /* numeric <oper> */
+        err = at_tok_nextstr(&line, &numeric);
+        if (err < 0)
+            goto error;
+
+        /*
+* The response of AT+COPS=? returns GSM networks and WCDMA networks as
+* separate network search hits. The RIL API does not support network
+* type parameter and the RIL must prevent duplicates.
+*/
+        for (j = numStoredNetworks - 1; j >= 0; j--)
+            if (strcmp(responseArray[j * QUERY_NW_NUM_PARAMS + 2],
+                       numeric) == 0) {
+                LOGD("%s(): Skipped storing duplicate operator: %s.",
+                     __func__, longAlphaNumeric);
+                continueOuterLoop = true;
+                break;
+            }
+
+        if (continueOuterLoop) {
+            free(s);
+            s = NULL;
+            continue; /* Skip storing this duplicate operator */
+        }
+
+        responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] =
+            alloca(strlen(longAlphaNumeric) + 1);
+        strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0],
+                             longAlphaNumeric);
+
+        responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1] =
+            alloca(strlen(shortAlphaNumeric) + 1);
+        strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1],
+                             shortAlphaNumeric);
+
+        responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2] =
+            alloca(strlen(numeric) + 1);
+        strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2],
+               numeric);
+
+        /* Fill long alpha with MNC/MCC if it is empty */
+        if (responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] &&
+            strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0])
+            == 0) {
+            responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] =
+                alloca(strlen(responseArray[numStoredNetworks *
+                QUERY_NW_NUM_PARAMS + 2]) + 1);
+            strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0],
+                   responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
+        }
+        /* Fill short alpha with MNC/MCC if it is empty */
+        if (responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1]
+            && strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS
+            + 1]) == 0) {
+            responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1] =
+                alloca(strlen(responseArray[numStoredNetworks *
+                QUERY_NW_NUM_PARAMS + 2]) + 1);
+            strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1],
+                   responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
+        }
+
+        /* Add status */
+        responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 3] =
+            alloca(strlen(statusTable[status]) + 1);
+        sprintf(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 3],
+                "%s", statusTable[status]);
+
+        numStoredNetworks++;
+        free(s);
+        s = NULL;
+    }
+
+    RIL_onRequestComplete(t, RIL_E_SUCCESS, responseArray, numStoredNetworks *
+                          QUERY_NW_NUM_PARAMS * sizeof(char *));
+    goto exit;
+
+error:
+    free(s);
+    RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+
+exit:
+    at_response_free(atresponse);
+}
+
+/*static void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t) {
+    // We expect an answer on the following form:
+    //  +COPS: (2,"AT&T","AT&T","310410",0),(1,"T-Mobile ","TMO","310260",0)
+     
 
     int err, operators, i, skip, status;
     ATResponse *p_response = NULL;
@@ -638,41 +796,55 @@ static void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token 
     char ** response = NULL;
 
     err = at_send_command_singleline("AT+COPS=?", "+COPS:", &p_response);
-
+    LOGI("COMMAND SENT ERROR CHECK");
     if (err != 0) goto error;
+    LOGI("COMMAND SENT ERROR CHECK END");
 
     line = p_response->p_intermediates->line;
 
     err = at_tok_start(&line);
     if (err < 0) goto error;
 
-    /* Count number of '(' in the +COPS response to get number of operators*/
+    // Count number of '(' in the +COPS response to get number of operators
     operators = 0;
     for (p = line; *p != '\0'; p++) {
         if (*p == '(') operators++;
     }
+    LOGI("FOUND %d OPERATORS", operators);
 
     response = (char **) alloca(operators * 4 * sizeof (char *));
 
     for (i = 0; i < operators; i++) {
         err = at_tok_nextstr(&line, &c_skip);
         if (err < 0) goto error;
+        LOGI("FOUND %s", c_skip);
+
         status = atoi(&c_skip[1]);
         response[i * 4 + 3] = (char*) networkStatusToRilString(status);
+        LOGI("STATUS IS %d", status);
 
         err = at_tok_nextstr(&line, &(response[i * 4 + 0]));
         if (err < 0) goto error;
+        LOGI("OP NAME %s", response[i * 4 + 0]);
 
         err = at_tok_nextstr(&line, &(response[i * 4 + 1]));
         if (err < 0) goto error;
+        LOGI("OP NAME BIS %s", response[i * 4 + 1]);
 
         err = at_tok_nextstr(&line, &(response[i * 4 + 2]));
         if (err < 0) goto error;
+        LOGI("OP MCC %s", response[i * 4 + 2]);
 
-        err = at_tok_nextstr(&line, &c_skip);
-
-        if (err < 0) goto error;
+        if (i!= operators-1){
+            err = at_tok_nextstr(&line, &c_skip);
+            if (err < 0) goto error;
+            LOGI("FOUND %s", c_skip);
+        }
+        else{
+            LOGI("LAST OPERATOR");
+        }
     }
+    LOGI("FINISHED PARSING OPERATORS");
 
     RIL_onRequestComplete(t, RIL_E_SUCCESS, response, (operators * 4 * sizeof (char *)));
     at_response_free(p_response);
@@ -682,7 +854,7 @@ error:
     at_response_free(p_response);
     LOGE("ERROR - requestQueryAvailableNetworks() failed");
     RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
-}
+}*/
 
 static void requestGetPreferredNetworkType(void *data, size_t datalen, RIL_Token t) {
     int err;
@@ -1147,38 +1319,38 @@ error:
 }
 
 static void requestScreenState(void *data, size_t datalen, RIL_Token t) {
-   /* int err, screenState;
+    /* int err, screenState;
 
-    assert(datalen >= sizeof (int *));
-    screenState = ((int*) data)[0];
+     assert(datalen >= sizeof (int *));
+     screenState = ((int*) data)[0];
 
-    //if (screenState == 1) {
-        // Screen is on - be sure to enable all unsolicited notifications again 
-        err = at_send_command("AT+CREG=2", NULL);
-        if (err < 0) goto error;
-        err = at_send_command("AT+CGREG=2", NULL);
-        if (err < 0) goto error;
-        //err = at_send_command("AT+CGEREP=2,0", NULL);
-        //if (err < 0) goto error;
-        //enqueueRILEvent(CMD_QUEUE_AUXILIARY, pollAndDispatchSignalStrength, NULL, NULL);
-    } else if (screenState == 0) {
-        // Screen is off - disable all unsolicited notifications
-        err = at_send_command("AT+CREG=0", NULL);
-        if (err < 0) goto error;
-        err = at_send_command("AT+CGREG=0", NULL);
-        if (err < 0) goto error;
-        err = at_send_command("AT+CGEREP=0,0", NULL);
-        if (err < 0) goto error;
-    } else {
-        // Not a defined value - error
-        goto error;
-    }*/
+     //if (screenState == 1) {
+         // Screen is on - be sure to enable all unsolicited notifications again
+         err = at_send_command("AT+CREG=2", NULL);
+         if (err < 0) goto error;
+         err = at_send_command("AT+CGREG=2", NULL);
+         if (err < 0) goto error;
+         //err = at_send_command("AT+CGEREP=2,0", NULL);
+         //if (err < 0) goto error;
+         //enqueueRILEvent(CMD_QUEUE_AUXILIARY, pollAndDispatchSignalStrength, NULL, NULL);
+     } else if (screenState == 0) {
+         // Screen is off - disable all unsolicited notifications
+         err = at_send_command("AT+CREG=0", NULL);
+         if (err < 0) goto error;
+         err = at_send_command("AT+CGREG=0", NULL);
+         if (err < 0) goto error;
+         err = at_send_command("AT+CGEREP=0,0", NULL);
+         if (err < 0) goto error;
+     } else {
+         // Not a defined value - error
+         goto error;
+     }*/
 
     RIL_onRequestComplete(t, RIL_E_SUCCESS, NULL, 0);
     return;
 
-//error:
-  //  LOGE("ERROR: requestScreenState failed");
+    //error:
+    //  LOGE("ERROR: requestScreenState failed");
     //RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
 }
 
@@ -2629,44 +2801,43 @@ static void requestDTMF(void * data, size_t datalen, RIL_Token t) {
 
 static void requestGetIMSI(RIL_Token t) {
     ATResponse *p_response = NULL;
-	char *imsi;
-	char *line;
-	char *response;
-	char *part;
-	int err;
+    char *imsi;
+    char *line;
+    char *response;
+    char *part;
+    int err;
 
-               int loop = 0;
-               int success = 0;
-               /* We are looping here because the command fails on the first try.
-                   What needs to be done, is to trap the "+CME ERROR: 14" which means
-                   SIM BUSY and retry that. As a workaround for now, simply try, wait
-                   1 second, and try again, until a valid result is obtained. Usually only
-                   takes 2 tries.
-                */
-               while ( loop < 10) {
-                 err = at_send_command_numeric("AT+CIMI", &p_response);
-                 if (err < 0 || p_response->success == 0) {
-                  sleep(1);
-                  loop++;
-                 }
-                 else {
-                  loop=10;
-                  success=1;
-                 }
-               }
+    int loop = 0;
+    int success = 0;
+    /* We are looping here because the command fails on the first try.
+        What needs to be done, is to trap the "+CME ERROR: 14" which means
+        SIM BUSY and retry that. As a workaround for now, simply try, wait
+        1 second, and try again, until a valid result is obtained. Usually only
+        takes 2 tries.
+     */
+    while (loop < 10) {
+        err = at_send_command_numeric("AT+CIMI", &p_response);
+        if (err < 0 || p_response->success == 0) {
+            sleep(1);
+            loop++;
+        } else {
+            loop = 10;
+            success = 1;
+        }
+    }
 
-/*             if (err < 0 || p_response->success == 0 ) */
-               if (success == 0)
-			goto error;
-		imsi = strdup(p_response->p_intermediates->line);
+    /*             if (err < 0 || p_response->success == 0 ) */
+    if (success == 0)
+        goto error;
+    imsi = strdup(p_response->p_intermediates->line);
 
-	RIL_onRequestComplete(t, RIL_E_SUCCESS, imsi, sizeof(char *));
-	free (imsi);
-	at_response_free(p_response);
-	return;
+    RIL_onRequestComplete(t, RIL_E_SUCCESS, imsi, sizeof (char *));
+    free(imsi);
+    at_response_free(p_response);
+    return;
 error:
-	RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
-	at_response_free(p_response);
+    RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+    at_response_free(p_response);
 }
 
 static void requestGetIMEISV(RIL_Token t) {
@@ -3551,11 +3722,11 @@ static void initializeCallback(void *param) {
 
     /* note: we don't check errors here. Everything important will
        be handled in onATTimeout and onATReaderClosed */
-   
-     LOGI ("############ Resetting modem to factory defaults");
-     at_send_command("AT&F", NULL);
-    
-/*  atchannel is tolerant of echo but it must */
+
+    LOGI("############ Resetting modem to factory defaults");
+    at_send_command("AT&F", NULL);
+
+    /*  atchannel is tolerant of echo but it must */
     /*  have verbose result codes */
     at_send_command("ATE0", NULL);
     at_send_command("ATQ0", NULL);
