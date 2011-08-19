@@ -20,3 +20,32 @@
 
 /** returns 1 if line starts with prefix, 0 if it does not */
 int strStartsWith(const char *line, const char *prefix);
+
+/**
+* Very simple function that extract and returns whats between ElementBeginTag
+* and ElementEndTag.
+*
+* Optional ppszRemainingDocument that can return a pointer to the remaining
+* of the document to be "scanned". This can be used if subsequent
+* scanning/searching is desired.
+*
+* This function is used to extract the parameters from the XML result
+* returned by U3xx during a PDP Context setup, and used to parse the
+* tuples of operators returned from AT+COPS.
+*
+* const char* document - Document to be scanned
+* const char* elementBeginTag - Begin tag to scan for, return whats
+* between begin/end tags
+* const char* elementEndTag - End tag to scan for, return whats
+* between begin/end tags
+* char** remainingDocumen t - Can return the a pointer to the remaining
+* of pszDocument, this parameter is optional
+*
+* return char* containing whats between begin/end tags, allocated on the
+* heap, need to free this.
+* return NULL if nothing is found.
+*/
+char *getFirstElementValue(const char *document,
+                           const char *elementBeginTag,
+                           const char *elementEndTag,
+                           char **remainingDocument);
