@@ -44,7 +44,7 @@
 #include <utils/Log.h>
 
 #define MAX_AT_RESPONSE 0x1000
-
+#define PROPERTY_VALUE_MAX 92
 /* pathname returned from RIL_REQUEST_SETUP_DATA_CALL / RIL_REQUEST_SETUP_DEFAULT_PDP */
 #define PPP_TTY_PATH "ppp0"
 
@@ -355,7 +355,7 @@ static void onSIMReady() {
     //at_send_command("AT+CUSD=1", NULL);
 
     /*  Enable +CGEV GPRS event notifications, but don't buffer */
-    //at_send_command("AT+CGEREP=0,0", NULL);
+    at_send_command("AT+CGEREP=2", NULL);
 
     /*  SMS PDU mode */
     //at_send_command("AT+CMGF=0", NULL);
@@ -628,35 +628,33 @@ error:
     RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
 }
 
-void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
-{
+void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t) {
     /*
-* AT+COPS=?
-* +COPS: [list of supported (<stat>,long alphanumeric <oper>
-* ,short alphanumeric <oper>,numeric <oper>[,<AcT>])s]
-* [,,(list of supported <mode>s),(list of supported <format>s)]
-*
-* <stat>
-* 0 = unknown
-* 1 = available
-* 2 = current
-* 3 = forbidden
-*/
+     * AT+COPS=?
+     * +COPS: [list of supported (<stat>,long alphanumeric <oper>
+     * ,short alphanumeric <oper>,numeric <oper>[,<AcT>])s]
+     * [,,(list of supported <mode>s),(list of supported <format>s)]
+     *
+     * <stat>
+     * 0 = unknown
+     * 1 = available
+     * 2 = current
+     * 3 = forbidden
+     */
 
     int err = 0;
     ATResponse *atresponse = NULL;
-    const char *statusTable[] =
-    { "unknown", "available", "current", "forbidden" };
+    const char *statusTable[] = {"unknown", "available", "current", "forbidden"};
     char **responseArray = NULL;
     char *p;
     int n = 0, i = 0, j = 0, numStoredNetworks = 0;
     char *s = NULL;
     int QUERY_NW_NUM_PARAMS = 4;
-    
+
     err = at_send_command_singleline("AT+COPS=?", "+COPS:", &atresponse);
 
     if (err < 0 ||
-        atresponse->success == 0 || atresponse->p_intermediates == NULL)
+            atresponse->success == 0 || atresponse->p_intermediates == NULL)
         goto error;
 
     p = atresponse->p_intermediates->line;
@@ -666,7 +664,7 @@ void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
     if (err < 0) goto error;
 
     /* Allocate array of strings, blocks of 4 strings. */
-    responseArray = alloca(n * QUERY_NW_NUM_PARAMS * sizeof(char *));
+    responseArray = alloca(n * QUERY_NW_NUM_PARAMS * sizeof (char *));
 
     /* Loop and collect response information into the response array. */
     for (i = 0; i < n; i++) {
@@ -683,7 +681,7 @@ void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
 
         if (line == NULL) {
             LOGE("Null pointer while parsing COPS response. This should not "
-                 "happen.");
+                    "happen.");
             goto error;
         }
         /* <stat> */
@@ -707,15 +705,15 @@ void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
             goto error;
 
         /*
-* The response of AT+COPS=? returns GSM networks and WCDMA networks as
-* separate network search hits. The RIL API does not support network
-* type parameter and the RIL must prevent duplicates.
-*/
+         * The response of AT+COPS=? returns GSM networks and WCDMA networks as
+         * separate network search hits. The RIL API does not support network
+         * type parameter and the RIL must prevent duplicates.
+         */
         for (j = numStoredNetworks - 1; j >= 0; j--)
             if (strcmp(responseArray[j * QUERY_NW_NUM_PARAMS + 2],
-                       numeric) == 0) {
+                    numeric) == 0) {
                 LOGD("%s(): Skipped storing duplicate operator: %s.",
-                     __func__, longAlphaNumeric);
+                        __func__, longAlphaNumeric);
                 continueOuterLoop = true;
                 break;
             }
@@ -727,44 +725,44 @@ void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
         }
 
         responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] =
-            alloca(strlen(longAlphaNumeric) + 1);
+                alloca(strlen(longAlphaNumeric) + 1);
         strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0],
-                             longAlphaNumeric);
+                longAlphaNumeric);
 
         responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1] =
-            alloca(strlen(shortAlphaNumeric) + 1);
+                alloca(strlen(shortAlphaNumeric) + 1);
         strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1],
-                             shortAlphaNumeric);
+                shortAlphaNumeric);
 
         responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2] =
-            alloca(strlen(numeric) + 1);
+                alloca(strlen(numeric) + 1);
         strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2],
-               numeric);
+                numeric);
 
         /* Fill long alpha with MNC/MCC if it is empty */
         if (responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] &&
-            strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0])
-            == 0) {
+                strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0])
+                == 0) {
             responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0] =
-                alloca(strlen(responseArray[numStoredNetworks *
-                QUERY_NW_NUM_PARAMS + 2]) + 1);
+                    alloca(strlen(responseArray[numStoredNetworks *
+                    QUERY_NW_NUM_PARAMS + 2]) + 1);
             strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 0],
-                   responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
+                    responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
         }
         /* Fill short alpha with MNC/MCC if it is empty */
         if (responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1]
-            && strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS
-            + 1]) == 0) {
+                && strlen(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS
+                + 1]) == 0) {
             responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1] =
-                alloca(strlen(responseArray[numStoredNetworks *
-                QUERY_NW_NUM_PARAMS + 2]) + 1);
+                    alloca(strlen(responseArray[numStoredNetworks *
+                    QUERY_NW_NUM_PARAMS + 2]) + 1);
             strcpy(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 1],
-                   responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
+                    responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 2]);
         }
 
         /* Add status */
         responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 3] =
-            alloca(strlen(statusTable[status]) + 1);
+                alloca(strlen(statusTable[status]) + 1);
         sprintf(responseArray[numStoredNetworks * QUERY_NW_NUM_PARAMS + 3],
                 "%s", statusTable[status]);
 
@@ -774,7 +772,7 @@ void requestQueryAvailableNetworks(void *data, size_t datalen, RIL_Token t)
     }
 
     RIL_onRequestComplete(t, RIL_E_SUCCESS, responseArray, numStoredNetworks *
-                          QUERY_NW_NUM_PARAMS * sizeof(char *));
+            QUERY_NW_NUM_PARAMS * sizeof (char *));
     goto exit;
 
 error:
@@ -1357,6 +1355,7 @@ static void requestScreenState(void *data, size_t datalen, RIL_Token t) {
 static void requestRegistrationState(void *data,
         size_t datalen, RIL_Token t) {
 
+    int debug_state = 0;
     int err;
     int response[4];
     char * responseStr[4];
@@ -1405,75 +1404,83 @@ static void requestRegistrationState(void *data,
     }
 
     //we are handling here the +CREG responses
-    LOGI("REQUEST REGISTRATION STATE DEBUG");
+    if (debug_state) LOGI("REQUEST REGISTRATION STATE DEBUG");
     switch (commas) {
         case 0: /* +CREG: <stat> */
-            LOGI("REQUEST CREG,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CREG,x NEXTINT END %d", response[0]);
             response[1] = -1;
             response[2] = -1;
             break;
 
         case 1: /* +CREG: <n>, <stat> */
-            LOGI("REQUEST CREG,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x NEXTINT START");
             err = at_tok_nextint(&line, &skip);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x NEXTINT END %d", skip);
-            LOGI("REQUEST CREG,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x NEXTINT END %d", skip);
+            if (debug_state) LOGI("REQUEST CREG,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CREG,x,x NEXTINT END %d", response[0]);
             response[1] = -1;
             response[2] = -1;
             if (err < 0) goto error;
             break;
 
         case 2: /* +CREG: <stat>, <lac>, <cid> */
-            LOGI("REQUEST CREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[0]);
-            LOGI("REQUEST CREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[1]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[1]);
-            LOGI("REQUEST CREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[1]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[2]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[2]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x NEXTINT END %d", response[2]);
 
             break;
         case 3: /* +CREG: <n>, <stat>, <lac>, <cid> */
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &skip);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", skip);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", skip);
 
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[0]);
 
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[1]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[1]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[1]);
 
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[2]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[2]);
+            if (debug_state) LOGI("REQUEST CREG,x,x,x,x NEXTINT END %d", response[2]);
 
             break;
         default:
             goto error;
     }
     asprintf(&responseStr[0], "%d", response[0]);
-    asprintf(&responseStr[1], "%x", response[1]);
-    asprintf(&responseStr[2], "%x", response[2]);
 
+    if (response[1] > 0)
+        asprintf(&responseStr[1], "%04x", response[1]);
+    else
+        responseStr[1] = NULL;
+
+    if (response[2] > 0)
+        asprintf(&responseStr[2], "%08x", response[2]);
+    else
+        responseStr[2] = NULL;
+    
     if (count > 3) {
         asprintf(&responseStr[3], "%d", response[3]);
     } else if (access_technology > 0) {
@@ -1496,6 +1503,7 @@ error:
 
 static void requestGprsRegistrationState(void *data, size_t datalen, RIL_Token t) {
 
+    int debug_state = 0;
     int err;
     int response[4];
     char * responseStr[4];
@@ -1543,74 +1551,82 @@ static void requestGprsRegistrationState(void *data, size_t datalen, RIL_Token t
         if (*p == ',') commas++;
     }
 
-    LOGI("REQUEST GPRS REGISTRATION STATE DEBUG");
+    if (debug_state) LOGI("REQUEST GPRS REGISTRATION STATE DEBUG");
     switch (commas) {
         case 0: /* +CREG: <stat> */
-            LOGI("REQUEST CGREG,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CGREG,x NEXTINT END %d", response[0]);
             response[1] = -1;
             response[2] = -1;
             break;
 
         case 1: /* +CREG: <n>, <stat> */
-            LOGI("REQUEST CGREG,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x NEXTINT START");
             err = at_tok_nextint(&line, &skip);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x NEXTINT END %d", skip);
-            LOGI("REQUEST CGREG,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x NEXTINT END %d", skip);
+            if (debug_state) LOGI("REQUEST CGREG,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CREG,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CREG,x,x NEXTINT END %d", response[0]);
             response[1] = -1;
             response[2] = -1;
             if (err < 0) goto error;
             break;
 
         case 2: /* +CREG: <stat>, <lac>, <cid> */
-            LOGI("REQUEST CGREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[0]);
-            LOGI("REQUEST CGREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[1]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[1]);
-            LOGI("REQUEST CGREG,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[1]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[2]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[2]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x NEXTINT END %d", response[2]);
 
             break;
         case 3: /* +CREG: <n>, <stat>, <lac>, <cid> */
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &skip);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", skip);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", skip);
 
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
             err = at_tok_nextint(&line, &response[0]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[0]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[0]);
 
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[1]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[1]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[1]);
 
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT START");
             err = at_tok_nexthexint(&line, &response[2]);
             if (err < 0) goto error;
-            LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[2]);
+            if (debug_state) LOGI("REQUEST CGREG,x,x,x,x NEXTINT END %d", response[2]);
 
             break;
         default:
             goto error;
     }
     asprintf(&responseStr[0], "%d", response[0]);
-    asprintf(&responseStr[1], "%x", response[1]);
-    asprintf(&responseStr[2], "%x", response[2]);
+
+    if (response[1] > 0)
+        asprintf(&responseStr[1], "%04x", response[1]);
+    else
+        responseStr[1] = NULL;
+
+    if (response[2] > 0)
+        asprintf(&responseStr[2], "%08x", response[2]);
+    else
+        responseStr[2] = NULL;
 
     if (count > 3) {
         asprintf(&responseStr[3], "%d", response[3]);
@@ -1633,7 +1649,8 @@ error:
 }
 
 static void requestOperator(void *data, size_t datalen, RIL_Token t) {
-    LOGI("REQUEST OPERATOR DEBUG");
+    int op_debug = 0;
+    if (op_debug) LOGI("REQUEST OPERATOR DEBUG");
     int err;
     int i;
     int skip;
@@ -1653,33 +1670,33 @@ static void requestOperator(void *data, size_t datalen, RIL_Token t) {
         free(cmd);
 
         if (err != 0 || p_response->success == 0) goto error;
-        LOGI("REQUEST OPERATOR: NO ERROR");
+        if (op_debug) LOGI("REQUEST OPERATOR: NO ERROR");
 
         line = p_response->p_intermediates->line;
 
-        LOGI("REQUEST OPERATOR: START START");
+        if (op_debug) LOGI("REQUEST OPERATOR: START START");
         err = at_tok_start(&line);
         if (err < 0) goto error;
-        LOGI("REQUEST OPERATOR: START END");
-        LOGI("REQUEST OPERATOR: NEXT INT START");
+        if (op_debug) LOGI("REQUEST OPERATOR: START END");
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT START");
 
         err = at_tok_nextint(&line, &skip);
         if (err < 0) goto error;
-        LOGI("REQUEST OPERATOR: NEXT INT END %d", skip);
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT END %d", skip);
 
         // If we're unregistered, we may just get
         // a "+COPS: 0" response
         if (!at_tok_hasmore(&line)) {
 
-            LOGI("REQUEST OPERATOR: UNREGISTERED, CONTINUE");
+            if (op_debug) LOGI("REQUEST OPERATOR: UNREGISTERED, CONTINUE");
             response[i] = NULL;
             continue;
         }
 
-        LOGI("REQUEST OPERATOR: NEXT INT START");
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT START");
         err = at_tok_nextint(&line, &skip);
         if (err < 0) goto error;
-        LOGI("REQUEST OPERATOR: NEXT INT END %d", skip);
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT END %d", skip);
 
         // a "+COPS: 0, n" response is also possible
         if (!at_tok_hasmore(&line)) {
@@ -1687,26 +1704,25 @@ static void requestOperator(void *data, size_t datalen, RIL_Token t) {
             continue;
         }
 
-        LOGI("REQUEST OPERATOR: NEXT STR START");
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT STR START");
         err = at_tok_nextstr(&line, &(response[i]));
         if (err < 0) goto error;
 
-        LOGI("REQUEST OPERATOR: NEXT STR END %s", response[i]);
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT STR END %s", response[i]);
 
-
-        LOGI("REQUEST OPERATOR: NEXT INT START");
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT START");
         /* Store the access technology for later use*/
         err = at_tok_nextint(&line, &access_technology);
         //if (err < 0) goto error;
         if (err < 0) access_technology = 0;
 
-        LOGI("REQUEST OPERATOR: NEXT INT END %d", access_technology);
+        if (op_debug) LOGI("REQUEST OPERATOR: NEXT INT END %d", access_technology);
 
         if (access_technology == 0) {
-            LOGI("REQUEST CREG, ACCESS TECHNO IS %d => 1", access_technology);
+            if (op_debug) LOGI("REQUEST OPERATOR, ACCESS TECHNO IS %d => 1", access_technology);
             access_technology = 1;
         } else if (access_technology == 2) {
-            LOGI("REQUEST CREG, ACCESS TECHNO IS %d => 3", access_technology);
+            if (op_debug) LOGI("REQUEST OPERATOR, ACCESS TECHNO IS %d => 3", access_technology);
             access_technology = 3;
         }
 
@@ -1759,7 +1775,7 @@ static void requestOperator(void *data, size_t datalen, RIL_Token t) {
 
     if (i != 3) {
         /* expect 3 lines exactly */
-        LOGE("REQUEST OPERATOR EXPECT 3 LINES");
+        if (op_debug) LOGE("REQUEST OPERATOR EXPECT 3 LINES");
         goto error;
     }
 
@@ -1813,6 +1829,51 @@ error:
 }
 
 static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
+    LOGI("######### requested setup data call\n");
+    int err;
+    ATResponse *p_response = NULL;
+    char ppp_exit_code[PROPERTY_VALUE_MAX];
+    static char address_ip[PROPERTY_VALUE_MAX];
+    char *response[3] = {"1", PPP_TTY_PATH, "0.0.0.0"};
+
+    err = property_set("ctl.start", "pppd_gprs");
+    LOGI("############ starting service pppd_gprs...");
+    if (err < 0) {
+        LOGI("########### error in starting service pppd_gprs: err %d", err);
+        goto error;
+    };
+    sleep(10);
+    err = property_get("net.gprs.ppp-exit", ppp_exit_code, "");
+    if (err < 0) {
+        LOGI("### error getting net.gprs.ppp-exit value: err %d", err);
+        goto error;
+    };
+    if (!strcmp(ppp_exit_code, "")) {
+        LOGI("PPP connect successfully");
+        err = property_get("net.ppp0.local-ip", address_ip, "");
+        if (err < 0) {
+            LOGI("### error getting net.ppp0.local-ip value: err %d", err);
+            goto error;
+        }
+        response[2] = address_ip;
+        LOGI("net.ppp0.local-ip: %s", response[2]);
+
+    } else {
+        LOGI("### PPP exit with error: %s", ppp_exit_code);
+        goto error;
+    }
+
+    RIL_onRequestComplete(t, RIL_E_SUCCESS, response, sizeof (response));
+    at_response_free(p_response);
+
+    return;
+error:
+    RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+    at_response_free(p_response);
+
+}
+
+/*static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
     const char *apn;
     char *cmd;
     int err;
@@ -1821,7 +1882,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
 
     apn = ((const char **) data)[2];
 
-    /* Configure DLC1 for GPRS data */
+    // Configure DLC1 for GPRS data
     // err = at_send_command("AT+XDATACHANNEL=1,1,\"/mux/1\",\"/mux/2\",0", NULL);
 
 #ifdef USE_TI_COMMANDS
@@ -1830,7 +1891,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
             NULL);
 
     err = at_send_command("AT%DATA=2,\"UART\",1,,\"SER\",\"UART\",0", NULL);
-#endif /* USE_TI_COMMANDS */
+#endif // USE_TI_COMMANDS
 
     int fd, qmistatus;
     size_t cur = 0;
@@ -1844,7 +1905,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
     LOGD("requesting data connection to APN '%s'", apn);
 
     fd = open("/dev/qmi", O_RDWR);
-    if (fd >= 0) { /* the device doesn't exist on the emulator */
+    if (fd >= 0) { // the device doesn't exist on the emulator
 
         LOGD("opened the qmi device\n");
         asprintf(&cmd, "up:%s", apn);
@@ -1959,7 +2020,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t) {
 error:
     RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
     at_response_free(p_response);
-}
+}*/
 
 static void requestDeactivateDeactivateDataCall(void *data, size_t datalen, RIL_Token t) {
     int err;
@@ -3382,9 +3443,9 @@ onRequest(int request, void *data, size_t datalen, RIL_Token t) {
             requestExplicitCallTransfer(t);
             break;
 
-        case RIL_REQUEST_SET_LOCATION_UPDATES:
-            requestSetLocationUpdates(data, datalen, t);
-            break;
+        //case RIL_REQUEST_SET_LOCATION_UPDATES:
+            //requestSetLocationUpdates(data, datalen, t);
+            //break;
 
         case RIL_REQUEST_STK_GET_PROFILE:
             requestSTKGetprofile(t);
@@ -3735,7 +3796,7 @@ static void initializeCallback(void *param) {
     /*  No auto-answer */
     //at_send_command("ATS0=0", NULL);
 
-    at_send_command("AT+CGCLASS=\"CC\"", NULL);
+    at_send_command("AT+CGCLASS=\"CG\"", NULL);
     at_send_command("AT+FCLASS=0", NULL);
 
     /*  Extended errors */
