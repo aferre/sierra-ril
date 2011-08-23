@@ -26,7 +26,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= \
-    xgold-ril.c \
+    sierra-ril.c \
     atchannel.c \
     misc.c \
     at_tok.c
