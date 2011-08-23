@@ -1,7 +1,9 @@
 Infineon X-GOLD RIL
 ---------------------
 
-This RIL intend to address all the Infineon X-Gold family.
+This RIL intend to address all the Sierra Wireless modems.
 
 
-this RIL was tested on the Infineon XMM6180 X-GOLD with an OMAP3430 over SPI for data/command and I2S for audio.
+this RIL was tested on the Sierra Wireless Q2687RD with a beagleboard over USB for data and USB-to-Serial for AT commands.
+
+For the moment, it's only supporting data connection.
